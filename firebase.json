@@ -1,6 +1,6 @@
 {
   "hosting": {
-    "public": "y",
+    "public": "build",
     "ignore": [
       "firebase.json",
       "**/.*",
@@ -12,11 +12,5 @@
         "destination": "/index.html"
       }
     ]
-  },
-  "firestore": {
-    "database": "(default)",
-    "location": "africa-south1",
-    "rules": "firestore.rules",
-    "indexes": "firestore.indexes.json"
   }
 }
