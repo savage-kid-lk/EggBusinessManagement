@@ -1,0 +1,225 @@
+/* =========================================
+   Auth.css - Login, Google & Phone Auth
+   ========================================= */
+
+:root {
+  --egg-yolk: #FFB300;
+  --egg-shell: #F9FAFB;
+  --egg-white: #FFFFFF;
+  --text-dark: #1F2937;
+  --text-light: #6B7280;
+  --primary-blue: #667eea;
+}
+
+.login-container {
+  min-height: 100vh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: linear-gradient(135deg, #FFF3E0 0%, #E3F2FD 100%);
+  padding: 20px;
+}
+
+.login-card {
+  background: var(--egg-white);
+  width: 100%;
+  max-width: 480px;
+  padding: 40px;
+  border-radius: 24px;
+  box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.1), 0 8px 10px -6px rgba(0, 0, 0, 0.1);
+  text-align: center;
+  border: 1px solid rgba(255, 255, 255, 0.5);
+}
+
+/* Logo Animation */
+.app-logo {
+  margin-bottom: 20px;
+}
+
+.logo-icon {
+  font-size: 4rem;
+  display: inline-block;
+  animation: bounce 2s infinite ease-in-out;
+}
+
+@keyframes bounce {
+  0%, 100% { transform: translateY(0); }
+  50% { transform: translateY(-10px); }
+}
+
+.app-logo h1 {
+  font-size: 1.8rem;
+  color: var(--text-dark);
+  margin: 10px 0;
+  font-weight: 800;
+  letter-spacing: -0.5px;
+}
+
+.app-description {
+  color: var(--text-light);
+  margin-bottom: 30px;
+  line-height: 1.5;
+}
+
+/* Tabs */
+.auth-method-tabs {
+  display: flex;
+  background: #F3F4F6;
+  padding: 5px;
+  border-radius: 12px;
+  margin-bottom: 25px;
+}
+
+.method-tab {
+  flex: 1;
+  padding: 12px;
+  border: none;
+  background: transparent;
+  border-radius: 8px;
+  font-weight: 600;
+  color: var(--text-light);
+  cursor: pointer;
+  transition: all 0.3s ease;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+}
+
+.method-tab.active {
+  background: var(--egg-white);
+  color: var(--primary-blue);
+  box-shadow: 0 2px 5px rgba(0,0,0,0.05);
+}
+
+/* Google Auth */
+.google-signin-btn {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  background: var(--egg-white);
+  border: 2px solid #E5E7EB;
+  padding: 14px;
+  border-radius: 12px;
+  font-size: 16px;
+  font-weight: 600;
+  color: var(--text-dark);
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.google-signin-btn:hover {
+  background: #F9FAFB;
+  border-color: #D1D5DB;
+  transform: translateY(-1px);
+}
+
+.auth-note {
+  font-size: 0.85rem;
+  color: var(--text-light);
+  margin-top: 15px;
+  background: #ECFDF5;
+  color: #059669;
+  padding: 8px;
+  border-radius: 8px;
+}
+
+/* Phone Auth */
+.phone-auth {
+  display: flex;
+  flex-direction: column;
+  gap: 15px;
+}
+
+.country-select, .phone-input, .code-input {
+  width: 100%;
+  padding: 14px;
+  border: 2px solid #E5E7EB;
+  border-radius: 12px;
+  font-size: 16px;
+  outline: none;
+  transition: border-color 0.2s;
+  background: var(--egg-white);
+}
+
+.phone-input:focus, .code-input:focus {
+  border-color: var(--primary-blue);
+}
+
+.code-input {
+  letter-spacing: 5px;
+  text-align: center;
+  font-size: 20px;
+  font-weight: bold;
+}
+
+.send-code-btn, .verify-btn {
+  width: 100%;
+  padding: 14px;
+  background: var(--primary-blue);
+  color: white;
+  border: none;
+  border-radius: 12px;
+  font-size: 16px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background 0.2s;
+}
+
+.send-code-btn:hover, .verify-btn:hover {
+  background: #5a67d8;
+}
+
+.send-code-btn:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.back-btn {
+  background: transparent;
+  border: none;
+  color: var(--text-light);
+  text-decoration: underline;
+  cursor: pointer;
+  margin-top: 10px;
+}
+
+/* Feature List */
+.app-features {
+  margin-top: 40px;
+  text-align: left;
+  border-top: 1px solid #E5E7EB;
+  padding-top: 20px;
+}
+
+.app-features h3 {
+  font-size: 0.9rem;
+  text-transform: uppercase;
+  color: var(--text-light);
+  margin-bottom: 15px;
+  letter-spacing: 1px;
+}
+
+.app-features ul {
+  list-style: none;
+  padding: 0;
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+}
+
+.app-features li {
+  font-size: 0.85rem;
+  color: var(--text-dark);
+}
+
+@media (max-width: 480px) {
+  .login-card {
+    padding: 25px;
+  }
+  .app-features ul {
+    grid-template-columns: 1fr;
+  }
+}
