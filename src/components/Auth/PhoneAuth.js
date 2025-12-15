@@ -3,8 +3,9 @@ import {
   signInWithPhoneNumber, 
   RecaptchaVerifier 
 } from 'firebase/auth';
+import { doc, getDoc } from 'firebase/firestore'; // Import Firestore
 import Swal from 'sweetalert2';
-import { auth } from '../../firebase';
+import { auth, db } from '../../firebase'; // Ensure db is imported
 import '../../styles/Auth.css';
 
 const PhoneAuth = () => {
@@ -14,7 +15,7 @@ const PhoneAuth = () => {
   const [isLoading, setIsLoading] = useState(false);
   const [countryCode, setCountryCode] = useState('+27');
 
-  // CLEANUP: properly remove recaptcha when leaving the page
+  // Cleanup Recaptcha on unmount
   useEffect(() => {
     return () => {
       if (window.recaptchaVerifier) {
@@ -29,22 +30,18 @@ const PhoneAuth = () => {
   }, []);
 
   const setupRecaptcha = () => {
-    // 1. Check if element exists
     if (!document.getElementById('recaptcha-container')) return;
-
-    // 2. Clear existing verifier if any
     if (window.recaptchaVerifier) {
       window.recaptchaVerifier.clear();
       window.recaptchaVerifier = null;
     }
 
-    // 3. Create new verifier
     try {
       window.recaptchaVerifier = new RecaptchaVerifier(
         auth,
         'recaptcha-container',
         {
-          'size': 'normal', // Visible checkbox is most reliable for real SMS
+          'size': 'normal',
           'callback': (response) => {
             console.log('reCAPTCHA solved');
           },
@@ -59,9 +56,7 @@ const PhoneAuth = () => {
     }
   };
 
-  // Initialize on mount
   useEffect(() => {
-    // Slight delay to ensure DOM is ready
     const timer = setTimeout(() => {
       if (!confirmationResult) setupRecaptcha();
     }, 500);
@@ -77,13 +72,28 @@ const PhoneAuth = () => {
     setIsLoading(true);
 
     try {
+      // 1. Clean and Format Number
       const cleanNumber = phoneNumber.replace(/^0+/, '').replace(/[^0-9]/g, '');
       const fullPhoneNumber = `${countryCode}${cleanNumber}`;
-      console.log('Sending real SMS to:', fullPhoneNumber);
+      console.log('Checking permission for:', fullPhoneNumber);
 
-      // Ensure verifier exists
+      // ---------------------------------------------------------
+      // 🛡️ SECURITY CHECK: Check Database BEFORE sending SMS
+      // ---------------------------------------------------------
+      // Checks for document in 'allowed_numbers' collection with ID == Phone Number
+      const userDocRef = doc(db, 'allowed_numbers', fullPhoneNumber);
+      const userDocSnap = await getDoc(userDocRef);
+
+      if (!userDocSnap.exists()) {
+        throw new Error('ACCESS DENIED: This number is not authorized.');
+      }
+      
+      console.log('Number authorized. Sending SMS...');
+
+      // 2. Initialize Recaptcha if needed
       if (!window.recaptchaVerifier) setupRecaptcha();
 
+      // 3. Send SMS (Cost Incurred Here)
       const confirmation = await signInWithPhoneNumber(
         auth, 
         fullPhoneNumber, 
@@ -94,21 +104,26 @@ const PhoneAuth = () => {
       Swal.fire('Code Sent', 'Check your messages', 'success');
 
     } catch (error) {
-      console.error('SMS Error:', error);
+      console.error('Auth Error:', error);
       
-      // Reset logic on error
+      // Reset Recaptcha so they can try again
       if (window.recaptchaVerifier) {
         window.recaptchaVerifier.clear();
         window.recaptchaVerifier = null;
         setTimeout(() => setupRecaptcha(), 1000);
       }
 
-      let msg = 'Failed to send code.';
-      if (error.code === 'auth/invalid-phone-number') msg = 'Invalid Phone Number';
+      let msg = error.message; 
+      
+      if (error.code === 'auth/invalid-phone-number') msg = 'Invalid Phone Number format.';
       if (error.code === 'auth/too-many-requests') msg = 'Too many attempts. Try later.';
       if (error.code === 'auth/quota-exceeded') msg = 'SMS Quota exceeded.';
       
-      Swal.fire('Error', msg, 'error');
+      Swal.fire({
+        icon: 'error',
+        title: 'Authentication Failed',
+        text: msg
+      });
     } finally {
       setIsLoading(false);
     }
@@ -172,10 +187,6 @@ const PhoneAuth = () => {
         </div>
       )}
 
-      {/* CRITICAL FIX: 
-         This container is OUTSIDE the conditional rendering above.
-         It stays in the DOM but is hidden via CSS when not needed.
-      */}
       <div 
         id="recaptcha-container" 
         style={{ 
@@ -191,7 +202,7 @@ const PhoneAuth = () => {
           disabled={isLoading || !phoneNumber}
           className="send-code-btn"
         >
-          {isLoading ? 'Sending...' : 'Send Verification Code'}
+          {isLoading ? 'Checking Access...' : 'Send Verification Code'}
         </button>
       )}
     </div>

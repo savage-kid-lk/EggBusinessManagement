@@ -1,5 +1,5 @@
 /* =========================================
-   Auth.css - Login, Google & Phone Auth
+   Auth.css
    ========================================= */
 
 :root {
@@ -31,7 +31,6 @@
   border: 1px solid rgba(255, 255, 255, 0.5);
 }
 
-/* Logo Animation */
 .app-logo {
   margin-bottom: 20px;
 }
@@ -93,6 +92,12 @@
 }
 
 /* Google Auth */
+.google-auth {
+  display: flex;
+  flex-direction: column;
+  gap: 15px;
+}
+
 .google-signin-btn {
   width: 100%;
   display: flex;
@@ -119,7 +124,7 @@
 .auth-note {
   font-size: 0.85rem;
   color: var(--text-light);
-  margin-top: 15px;
+  margin-top: 10px;
   background: #ECFDF5;
   color: #059669;
   padding: 8px;
@@ -186,40 +191,14 @@
   margin-top: 10px;
 }
 
-/* Feature List */
-.app-features {
-  margin-top: 40px;
-  text-align: left;
-  border-top: 1px solid #E5E7EB;
-  padding-top: 20px;
-}
-
-.app-features h3 {
-  font-size: 0.9rem;
-  text-transform: uppercase;
-  color: var(--text-light);
-  margin-bottom: 15px;
-  letter-spacing: 1px;
-}
-
-.app-features ul {
-  list-style: none;
-  padding: 0;
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 10px;
-}
-
-.app-features li {
-  font-size: 0.85rem;
-  color: var(--text-dark);
+.loading-spinner {
+  font-size: 1.2rem;
+  color: var(--primary-blue);
+  font-weight: bold;
 }
 
 @media (max-width: 480px) {
   .login-card {
     padding: 25px;
-  }
-  .app-features ul {
-    grid-template-columns: 1fr;
   }
 }
