@@ -1,7 +1,10 @@
-import React, { useState, useRef, useEffect } from 'react';
-import { signInWithPhoneNumber } from 'firebase/auth';
+import React, { useState, useEffect } from 'react';
+import { 
+  signInWithPhoneNumber, 
+  RecaptchaVerifier 
+} from 'firebase/auth';
 import Swal from 'sweetalert2';
-import { auth, RecaptchaVerifier } from '../../firebase';
+import { auth } from '../../firebase';
 import '../../styles/Auth.css';
 
 const PhoneAuth = () => {
@@ -9,158 +12,187 @@ const PhoneAuth = () => {
   const [verificationCode, setVerificationCode] = useState('');
   const [confirmationResult, setConfirmationResult] = useState(null);
   const [isLoading, setIsLoading] = useState(false);
-  const [countryCode, setCountryCode] = useState('+263');
-  const recaptchaVerifierRef = useRef(null);
+  const [countryCode, setCountryCode] = useState('+27');
 
+  // CLEANUP: properly remove recaptcha when leaving the page
   useEffect(() => {
-    recaptchaVerifierRef.current = new RecaptchaVerifier(
-      'recaptcha-container',
-      {
-        size: 'normal',
-        callback: (response) => {
-          console.log('reCAPTCHA solved:', response);
-        },
-        'expired-callback': () => {
-          console.log('reCAPTCHA expired');
-          if (window.grecaptcha && recaptchaVerifierRef.current) {
-            window.grecaptcha.reset(recaptchaVerifierRef.current);
-          }
+    return () => {
+      if (window.recaptchaVerifier) {
+        try {
+          window.recaptchaVerifier.clear();
+          window.recaptchaVerifier = null;
+        } catch (e) {
+          console.error(e);
         }
-      },
-      auth
-    );
+      }
+    };
   }, []);
 
+  const setupRecaptcha = () => {
+    // 1. Check if element exists
+    if (!document.getElementById('recaptcha-container')) return;
+
+    // 2. Clear existing verifier if any
+    if (window.recaptchaVerifier) {
+      window.recaptchaVerifier.clear();
+      window.recaptchaVerifier = null;
+    }
+
+    // 3. Create new verifier
+    try {
+      window.recaptchaVerifier = new RecaptchaVerifier(
+        auth,
+        'recaptcha-container',
+        {
+          'size': 'normal', // Visible checkbox is most reliable for real SMS
+          'callback': (response) => {
+            console.log('reCAPTCHA solved');
+          },
+          'expired-callback': () => {
+            console.log('reCAPTCHA expired');
+          }
+        }
+      );
+      window.recaptchaVerifier.render();
+    } catch (err) {
+      console.error('Recaptcha setup error:', err);
+    }
+  };
+
+  // Initialize on mount
+  useEffect(() => {
+    // Slight delay to ensure DOM is ready
+    const timer = setTimeout(() => {
+      if (!confirmationResult) setupRecaptcha();
+    }, 500);
+    return () => clearTimeout(timer);
+  }, [confirmationResult]);
+
   const sendVerificationCode = async () => {
-    if (!phoneNumber.trim()) {
+    if (!phoneNumber) {
       Swal.fire('Error', 'Please enter a phone number', 'error');
       return;
     }
 
+    setIsLoading(true);
+
     try {
-      setIsLoading(true);
-      
-      const fullPhoneNumber = `${countryCode}${phoneNumber.replace(/\D/g, '')}`;
-      
+      const cleanNumber = phoneNumber.replace(/^0+/, '').replace(/[^0-9]/g, '');
+      const fullPhoneNumber = `${countryCode}${cleanNumber}`;
+      console.log('Sending real SMS to:', fullPhoneNumber);
+
+      // Ensure verifier exists
+      if (!window.recaptchaVerifier) setupRecaptcha();
+
       const confirmation = await signInWithPhoneNumber(
-        auth,
-        fullPhoneNumber,
-        recaptchaVerifierRef.current
+        auth, 
+        fullPhoneNumber, 
+        window.recaptchaVerifier
       );
       
       setConfirmationResult(confirmation);
-      
-      Swal.fire({
-        icon: 'success',
-        title: 'Code Sent!',
-        text: `Verification code sent to ${fullPhoneNumber}`,
-        timer: 3000
-      });
-      
+      Swal.fire('Code Sent', 'Check your messages', 'success');
+
     } catch (error) {
-      console.error('Error sending code:', error);
+      console.error('SMS Error:', error);
       
-      let errorMessage = 'Failed to send verification code';
-      if (error.code === 'auth/invalid-phone-number') {
-        errorMessage = 'Invalid phone number format';
+      // Reset logic on error
+      if (window.recaptchaVerifier) {
+        window.recaptchaVerifier.clear();
+        window.recaptchaVerifier = null;
+        setTimeout(() => setupRecaptcha(), 1000);
       }
+
+      let msg = 'Failed to send code.';
+      if (error.code === 'auth/invalid-phone-number') msg = 'Invalid Phone Number';
+      if (error.code === 'auth/too-many-requests') msg = 'Too many attempts. Try later.';
+      if (error.code === 'auth/quota-exceeded') msg = 'SMS Quota exceeded.';
       
-      Swal.fire('Error', errorMessage, 'error');
+      Swal.fire('Error', msg, 'error');
     } finally {
       setIsLoading(false);
     }
   };
 
   const verifyCode = async () => {
-    if (!verificationCode.trim() || !confirmationResult) {
-      Swal.fire('Error', 'Please enter verification code', 'error');
-      return;
-    }
-
+    if (!verificationCode) return;
+    setIsLoading(true);
     try {
-      setIsLoading(true);
       await confirmationResult.confirm(verificationCode);
-      
-      Swal.fire({
-        icon: 'success',
-        title: 'Success!',
-        text: 'Phone number verified',
-        timer: 2000
-      });
-      
+      Swal.fire('Success', 'Phone Verified!', 'success');
     } catch (error) {
-      console.error('Error verifying code:', error);
-      Swal.fire('Error', 'Invalid verification code', 'error');
+      Swal.fire('Error', 'Invalid Code', 'error');
     } finally {
       setIsLoading(false);
     }
   };
 
+  const reset = () => {
+    setConfirmationResult(null);
+    setVerificationCode('');
+    setIsLoading(false);
+  };
+
   return (
     <div className="phone-auth">
       <div className="country-selector">
-        <select 
-          value={countryCode}
-          onChange={(e) => setCountryCode(e.target.value)}
-          className="country-select"
-          disabled={isLoading}
-        >
-          <option value="+263">🇿🇼 Zimbabwe (+263)</option>
+        <select value={countryCode} onChange={e => setCountryCode(e.target.value)} className="country-select">
           <option value="+27">🇿🇦 South Africa (+27)</option>
-          <option value="+254">🇰🇪 Kenya (+254)</option>
-          <option value="+234">🇳🇬 Nigeria (+234)</option>
+          <option value="+263">🇿🇼 Zimbabwe (+263)</option>
         </select>
       </div>
 
       {!confirmationResult ? (
-        <>
-          <input
-            type="tel"
-            placeholder="771234567"
+        <div className="phone-input-container">
+          <input 
+            type="tel" 
+            placeholder="76 123 4567" 
             value={phoneNumber}
-            onChange={(e) => setPhoneNumber(e.target.value)}
+            onChange={e => setPhoneNumber(e.target.value)}
             className="phone-input"
             disabled={isLoading}
           />
-          
-          <div id="recaptcha-container"></div>
-          
-          <button 
-            onClick={sendVerificationCode}
-            disabled={isLoading || !phoneNumber.trim()}
-            className="send-code-btn"
-          >
-            {isLoading ? 'Sending...' : 'Send Verification Code'}
-          </button>
-        </>
+        </div>
       ) : (
-        <>
-          <input
-            type="text"
-            placeholder="Enter 6-digit code"
+        <div className="verification-container">
+          <input 
+            type="text" 
+            placeholder="123456" 
             value={verificationCode}
-            onChange={(e) => setVerificationCode(e.target.value.replace(/\D/g, '').slice(0, 6))}
-            className="code-input"
-            disabled={isLoading}
+            onChange={e => setVerificationCode(e.target.value)}
+            className="code-input" 
             maxLength={6}
           />
-          
-          <button 
-            onClick={verifyCode}
-            disabled={isLoading || verificationCode.length !== 6}
-            className="verify-btn"
-          >
+          <button onClick={verifyCode} className="verify-btn" disabled={isLoading}>
             {isLoading ? 'Verifying...' : 'Verify Code'}
           </button>
-          
-          <button 
-            onClick={() => setConfirmationResult(null)}
-            className="back-btn"
-            disabled={isLoading}
-          >
-            Try different number
+          <button onClick={reset} className="back-btn" disabled={isLoading}>
+             Wrong Number?
           </button>
-        </>
+        </div>
+      )}
+
+      {/* CRITICAL FIX: 
+         This container is OUTSIDE the conditional rendering above.
+         It stays in the DOM but is hidden via CSS when not needed.
+      */}
+      <div 
+        id="recaptcha-container" 
+        style={{ 
+          margin: '20px auto', 
+          display: confirmationResult ? 'none' : 'flex', 
+          justifyContent: 'center' 
+        }}
+      ></div>
+
+      {!confirmationResult && (
+        <button 
+          onClick={sendVerificationCode} 
+          disabled={isLoading || !phoneNumber}
+          className="send-code-btn"
+        >
+          {isLoading ? 'Sending...' : 'Send Verification Code'}
+        </button>
       )}
     </div>
   );
