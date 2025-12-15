@@ -153,7 +153,6 @@ const PhoneAuth = () => {
       <div className="country-selector">
         <select value={countryCode} onChange={e => setCountryCode(e.target.value)} className="country-select">
           <option value="+27">🇿🇦 South Africa (+27)</option>
-          <option value="+263">🇿🇼 Zimbabwe (+263)</option>
         </select>
       </div>
 
