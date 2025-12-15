@@ -1,70 +1,104 @@
-# Getting Started with Create React App
+# Egg Stock Control System
+A modern, mobile-first inventory and sales management application designed specifically for egg distribution businesses. This application allows for real-time tracking of stock, dynamic pricing logic (including bulk discounts), and secure staff access control via Google and Phone authentication.
 
-This project was bootstrapped with [Create React App](https://github.com/facebook/create-react-app).
+## Key Features
 
-## Available Scripts
+Stock & Sales Management
+Real-Time Inventory: Instantly updates stock levels across all devices as sales are made.
 
-In the project directory, you can run:
+## Smart Pricing Engine:
 
-### `npm start`
+Standard Price: Default per-tray pricing (e.g., R60).
+Bulk Discounts: Automatically applies reduced pricing (e.g., R55) when 20+ trays are sold.
+Special Offers: Schedule promotional prices with automatic start and end dates.
+Profit Tracking: Automatically calculates net profit based on cost price vs. selling price.
 
-Runs the app in the development mode.\
-Open [http://localhost:3000](http://localhost:3000) to view it in your browser.
+## Advanced Security (Whitelist Access)
 
-The page will reload when you make changes.\
-You may also see any lint errors in the console.
+Unlike standard apps, this system uses a "Closed Access" model to prevent unauthorized usage and unnecessary SMS costs:
+Pre-Flight Phone Check: Checks the database before sending an SMS OTP to ensure only whitelisted numbers can trigger a verification code (saving Firebase costs).
+Google Auth Gatekeeper: Automatically signs out unauthorized Google accounts if they are not listed in the staff database.
+Admin Dashboard: Dedicated interface for the owner to add/remove staff access instantly.
 
-### `npm test`
+## Progressive Web App (PWA)
 
-Launches the test runner in the interactive watch mode.\
-See the section about [running tests](https://facebook.github.io/create-react-app/docs/running-tests) for more information.
+Installable: Works like a native app on Android and iOS (Add to Home Screen).
+Mobile Optimized: Touch-friendly buttons, responsive layouts, and "Redirect" login flows to prevent popup blocking on mobile browsers.
 
-### `npm run build`
+## Tech Stack
 
-Builds the app for production to the `build` folder.\
-It correctly bundles React in production mode and optimizes the build for the best performance.
+Frontend: React.js
+Backend: Firebase (Firestore, Authentication, Hosting)
+Styling: Custom CSS3 (Responsive & Mobile-First)
 
-The build is minified and the filenames include the hashes.\
-Your app is ready to be deployed!
+## Key Libraries:
 
-See the section about [deployment](https://facebook.github.io/create-react-app/docs/deployment) for more information.
+react-firebase-hooks
 
-### `npm run eject`
+date-fns (Date management)
+sweetalert2 (Professional UI alerts)
 
-**Note: this is a one-way operation. Once you `eject`, you can't go back!**
+# Installation & Setup
 
-If you aren't satisfied with the build tool and configuration choices, you can `eject` at any time. This command will remove the single build dependency from your project.
+## 1. Clone the Repository
+git clone https://github.com/your-username/egg-stock-control.git
+cd egg-stock-control
 
-Instead, it will copy all the configuration files and the transitive dependencies (webpack, Babel, ESLint, etc) right into your project so you have full control over them. All of the commands except `eject` will still work, but they will point to the copied scripts so you can tweak them. At this point you're on your own.
+## 2. Install Dependencies
+npm install
 
-You don't have to ever use `eject`. The curated feature set is suitable for small and middle deployments, and you shouldn't feel obligated to use this feature. However we understand that this tool wouldn't be useful if you couldn't customize it when you are ready for it.
+## 3. Environment Configuration
+Create a .env.local file in the root directory and add your Firebase credentials:
 
-## Learn More
+Code snippet:
 
-You can learn more in the [Create React App documentation](https://facebook.github.io/create-react-app/docs/getting-started).
+REACT_APP_FIREBASE_API_KEY=your_api_key
+REACT_APP_FIREBASE_AUTH_DOMAIN=your_project.firebaseapp.com
+REACT_APP_FIREBASE_PROJECT_ID=your_project_id
+REACT_APP_FIREBASE_STORAGE_BUCKET=your_bucket.appspot.com
+REACT_APP_FIREBASE_MESSAGING_SENDER_ID=your_sender_id
+REACT_APP_FIREBASE_APP_ID=your_app_id
+REACT_APP_ADMIN_EMAIL=youremail@gmail.com(update the emal in Login.js on line 42 to your superadmin email)
 
-To learn React, check out the [React documentation](https://reactjs.org/).
+## 4. Run Locally
+npm start
+Note: Access via http://127.0.0.1:3000 to prevent Firebase Auth domain errors.
 
-### Code Splitting
+# Database Permissions (Firestore Rules)
+To make the cost-saving security features work, apply these rules in your Firebase Console:
 
-This section has moved here: [https://facebook.github.io/create-react-app/docs/code-splitting](https://facebook.github.io/create-react-app/docs/code-splitting)
+JavaScript:
 
-### Analyzing the Bundle Size
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    
+    // Allow public to check if THEIR number exists (Read-only single doc)
+    // This enables the "Pre-flight" check before sending SMS
+    match /allowed_numbers/{phoneNumber} {
+      allow get: if true;
+      allow list: if false;
+    }
 
-This section has moved here: [https://facebook.github.io/create-react-app/docs/analyzing-the-bundle-size](https://facebook.github.io/create-react-app/docs/analyzing-the-bundle-size)
+    // Secure all other data to logged-in users only
+    match /{document=**} {
+      allow read, write: if request.auth != null;
+    }
+  }
+}
 
-### Making a Progressive Web App
+# Mobile Installation Guide
 
-This section has moved here: [https://facebook.github.io/create-react-app/docs/making-a-progressive-web-app](https://facebook.github.io/create-react-app/docs/making-a-progressive-web-app)
+## Android (Chrome):
 
-### Advanced Configuration
+Open the app link in Chrome.
+Tap the menu (⋮) -> "Install App" or tap the prompt at the bottom.
 
-This section has moved here: [https://facebook.github.io/create-react-app/docs/advanced-configuration](https://facebook.github.io/create-react-app/docs/advanced-configuration)
+## iOS (Safari):
 
-### Deployment
+Open the app link in Safari.
+Tap the Share button (box with arrow).
+Scroll down and select "Add to Home Screen".
 
-This section has moved here: [https://facebook.github.io/create-react-app/docs/deployment](https://facebook.github.io/create-react-app/docs/deployment)
-
-### `npm run build` fails to minify
-
-This section has moved here: [https://facebook.github.io/create-react-app/docs/troubleshooting#npm-run-build-fails-to-minify](https://facebook.github.io/create-react-app/docs/troubleshooting#npm-run-build-fails-to-minify)
+# Author
+## Letago Kekana Web Developer & Computer Science graduate
