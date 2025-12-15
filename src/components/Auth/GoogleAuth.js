@@ -1,52 +1,59 @@
-import React, { useEffect, useState } from 'react';
-import { 
-  signInWithRedirect, 
-  getRedirectResult 
-} from 'firebase/auth';
+import React from 'react';
+import { signInWithPopup, signOut } from 'firebase/auth';
+import { collection, query, where, getDocs } from 'firebase/firestore'; // Firestore imports
 import { FcGoogle } from 'react-icons/fc';
 import Swal from 'sweetalert2';
-import { auth, googleProvider } from '../../firebase';
+import { auth, googleProvider, db } from '../../firebase';
 import '../../styles/Auth.css';
 
 const GoogleAuth = () => {
-  const [isRedirecting, setIsRedirecting] = useState(false);
-
-  // Check for errors when the user returns from Google
-  useEffect(() => {
-    const handleRedirectResult = async () => {
-      try {
-        await getRedirectResult(auth);
-        // Note: We don't need to handle success here explicitly 
-        // because Login.js detects the 'user' state change 
-        // and runs the security whitelist check automatically.
-      } catch (error) {
-        console.error('Redirect Login Error:', error);
-        setIsRedirecting(false);
-        
-        let msg = 'Login Failed';
-        if (error.code === 'auth/network-request-failed') msg = 'Network Error. Check your connection.';
-        if (error.code === 'auth/user-disabled') msg = 'This account has been disabled.';
-        
-        Swal.fire({
-          icon: 'error',
-          title: 'Login Error',
-          text: msg
-        });
-      }
-    };
-
-    handleRedirectResult();
-  }, []);
-
   const handleGoogleSignIn = async () => {
-    setIsRedirecting(true);
     try {
-      // This will navigate away from your page to Google
-      await signInWithRedirect(auth, googleProvider);
+      // 1. Perform Google Login
+      const result = await signInWithPopup(auth, googleProvider);
+      const user = result.user;
+      
+      // 2. 🛡️ SECURITY CHECK: Verify Email in Database
+      const ADMIN_EMAIL = process.env.REACT_APP_ADMIN_EMAIL || 'kekanaletago58@gmail.com';
+      
+      // Allow Admin to bypass check
+      if (user.email !== ADMIN_EMAIL) {
+        // Search 'users' collection for this email
+        const q = query(collection(db, 'users'), where('email', '==', user.email));
+        const querySnapshot = await getDocs(q);
+
+        if (querySnapshot.empty) {
+          // USER NOT FOUND IN DATABASE
+          await signOut(auth); // Kick them out immediately
+          throw new Error('Access Denied: Your email is not whitelisted.');
+        }
+      }
+      
+      // 3. Success Message (Only if they passed the check)
+      Swal.fire({
+        icon: 'success',
+        title: 'Welcome!',
+        text: `Signed in as ${user.email}`,
+        timer: 2000
+      });
+      
     } catch (error) {
-      console.error("Redirect Init Error:", error);
-      setIsRedirecting(false);
-      Swal.fire('Error', 'Could not connect to Google', 'error');
+      console.error('Google sign-in error:', error);
+      
+      let errorMessage = 'Failed to sign in';
+      if (error.message.includes('Access Denied')) {
+        errorMessage = error.message;
+      } else if (error.code === 'auth/popup-closed-by-user') {
+        errorMessage = 'Sign-in cancelled';
+      } else if (error.code === 'auth/network-request-failed') {
+        errorMessage = 'Network error. Check connection.';
+      }
+      
+      Swal.fire({
+        icon: 'error',
+        title: 'Login Failed',
+        text: errorMessage
+      });
     }
   };
 
@@ -55,12 +62,9 @@ const GoogleAuth = () => {
       <button 
         onClick={handleGoogleSignIn}
         className="google-signin-btn"
-        disabled={isRedirecting}
       >
         <FcGoogle size={24} />
-        <span>
-          {isRedirecting ? 'Redirecting to Google...' : 'Sign in with Google'}
-        </span>
+        <span>Sign in with Google</span>
       </button>
       
       <p className="auth-note">

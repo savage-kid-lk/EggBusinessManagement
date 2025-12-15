@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useAuthState } from 'react-firebase-hooks/auth';
-import { doc, getDoc, collection, query, where, getDocs } from 'firebase/firestore';
+import { doc, getDoc } from 'firebase/firestore';
 import { signOut } from 'firebase/auth';
 import Swal from 'sweetalert2';
 import { auth, db } from '../../firebase';
@@ -20,57 +20,52 @@ const Login = () => {
       setCheckingAccess(true);
 
       try {
-        const ADMIN_EMAIL = process.env.REACT_APP_ADMIN_EMAIL || 'kekanaletago58@gmail.com';
+        // 1. Check if user exists in the 'users' collection (Whitelist)
+        // We assume you have manually added your staff here previously
+        // or the Admin adds them.
         
-        // 1. Check if it's the Master Admin (Always allow)
-        if (user.email === ADMIN_EMAIL) {
-          setCheckingAccess(false);
-          return;
+        // Strategy: We check if a doc exists with their Email or Phone
+        // Note: For this to work, your database must have a 'users' collection
+        // where the document ID is the email or phone, OR a field matches.
+        
+        // Simple approach: Check if their UID is known, or just allow Admin for now
+        // For a simple whitelist, let's look for their email/phone in a 'allowed_users' collection
+        // OR simpler: Check if they have a 'role' assigned in your main user database.
+
+        const userRef = doc(db, 'users', user.uid);
+        const userSnap = await getDoc(userRef);
+
+        // CHECK 1: If user does not exist in DB at all -> DENY
+        // (This means the Admin hasn't created their profile yet)
+        if (!userSnap.exists()) {
+           // EXCEPTION: Allow the main Admin Email to get in to set things up
+           const ADMIN_EMAIL = process.env.REACT_APP_ADMIN_EMAIL || 'kekanaletago58@gmail.com';
+           if (user.email === ADMIN_EMAIL) {
+             // Allow admin, logic continues...
+           } else {
+             throw new Error('Access Denied. You are not a registered staff member.');
+           }
+        } else {
+            // CHECK 2: Check if account is active/enabled (optional extra security)
+            const userData = userSnap.data();
+            if (userData.status === 'disabled') {
+                throw new Error('Your account has been disabled by the Administrator.');
+            }
         }
-
-        let isAuthorized = false;
-
-        if (user.email) {
-          // --- GOOGLE LOGIN CHECK ---
-          // Look for this email in the 'users' collection
-          const q = query(collection(db, 'users'), where('email', '==', user.email));
-          const querySnapshot = await getDocs(q);
-          
-          if (!querySnapshot.empty) {
-            isAuthorized = true;
-            // Optional: Check if disabled
-            const userData = querySnapshot.docs[0].data();
-            if (userData.status === 'disabled') throw new Error('Account disabled.');
-          }
-        } else if (user.phoneNumber) {
-          // --- PHONE LOGIN CHECK ---
-          // The PhoneAuth component does a pre-check, but we double-check here 
-          // to be safe (e.g. if they were already logged in but removed from DB)
-          const userDocRef = doc(db, 'allowed_numbers', user.phoneNumber);
-          const userDocSnap = await getDoc(userDocRef);
-          
-          if (userDocSnap.exists()) {
-            isAuthorized = true;
-          }
-        }
-
-        if (!isAuthorized) {
-          throw new Error('Access Denied. You are not on the authorized list.');
-        }
-
-        // Access Granted
+        
+        // If we get here, they are allowed.
         setCheckingAccess(false);
 
       } catch (error) {
         console.error("Access Check Failed:", error);
         
-        // Force Logout immediately
+        // Force Logout
         await signOut(auth);
         
         Swal.fire({
           icon: 'error',
           title: 'Access Denied',
-          text: error.message,
+          text: error.message || 'You are not authorized to use this app.',
           confirmButtonColor: '#d33'
         });
         setCheckingAccess(false);
@@ -82,20 +77,17 @@ const Login = () => {
     }
   }, [user, loading]);
 
-  // Loading State (while Redirecting or Verifying)
+  // Loading State
   if (loading || checkingAccess) {
     return (
       <div className="login-container">
-        <div className="login-card" style={{display:'flex', flexDirection:'column', alignItems:'center', gap:'20px'}}>
-          <div className="loading-spinner"></div>
-          <p style={{color:'#666'}}>Verifying credentials...</p>
-        </div>
+        <div className="loading-spinner">Verifying Access...</div>
       </div>
     );
   }
 
-  // If user is authenticated and authorized, App.js handles the switch to Dashboard.
-  // This component simply stops rendering to allow App.js to take over.
+  // If user is authenticated and authorized, App.js handles the redirect to Dashboard
+  // This component only renders if NO user is logged in.
   if (user) return null; 
 
   return (
