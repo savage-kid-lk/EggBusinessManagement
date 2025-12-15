@@ -1,6 +1,17 @@
 import { 
-  collection, doc, getDoc, getDocs, setDoc, updateDoc, addDoc, 
-  query, where, orderBy, serverTimestamp, Timestamp, onSnapshot, runTransaction 
+  collection,
+  doc,
+  getDoc,
+  getDocs,
+  setDoc, // Changed from updateDoc to setDoc for safety
+  addDoc,
+  query,
+  where,
+  orderBy,
+  serverTimestamp,
+  Timestamp,
+  onSnapshot,
+  runTransaction
 } from 'firebase/firestore';
 import { db } from '../firebase';
 import { startOfDay, endOfDay, isWithinInterval } from 'date-fns';
@@ -12,17 +23,18 @@ class DatabaseService {
       INVENTORY: 'inventory',
       SALES: 'sales',
       PRICES: 'prices',
-      USERS: 'users'
+      REPORTS: 'daily_reports',
+      USERS: 'users',
+      ALLOWED_NUMBERS: 'allowed_numbers'
     };
   }
 
-  // Get current base price info (Standard vs Special)
-  // Does not calculate Bulk here, as Bulk depends on Quantity
+  // 1. Get Current Price (Standard vs Special)
   async getCurrentBasePrice() {
     try {
       const today = new Date();
       
-      // 1. Check for Active Specials
+      // Check active specials
       const pricesRef = collection(db, this.COLLECTIONS.PRICES);
       const activeQuery = query(pricesRef, where('isActive', '==', true));
       const snapshot = await getDocs(activeQuery);
@@ -34,7 +46,6 @@ class DatabaseService {
         const startDate = priceData.startDate?.toDate();
         const endDate = priceData.endDate?.toDate();
         
-        // STRICT DATE CHECK: Price only valid if today is within range
         if (startDate && endDate && isWithinInterval(today, { start: startDate, end: endDate })) {
           activeSpecialPrice = { ...priceData, id: doc.id };
         }
@@ -49,7 +60,7 @@ class DatabaseService {
         };
       }
       
-      // 2. Fallback to Standard Price
+      // Fallback to Standard
       const standardRef = doc(db, this.COLLECTIONS.SETTINGS, 'standard_price');
       const standardDoc = await getDoc(standardRef);
       
@@ -61,7 +72,8 @@ class DatabaseService {
         };
       }
       
-      return { price: 60, name: 'Standard Price', isSpecial: false }; // Default R60
+      // Default if nothing exists
+      return { price: 60, name: 'Standard Price', isSpecial: false };
       
     } catch (error) {
       console.error('Error getting price:', error);
@@ -69,25 +81,23 @@ class DatabaseService {
     }
   }
 
-  // Record a sale with BULK LOGIC
+  // 2. Record Sale (Auto-creates inventory if missing)
   async recordSale(saleData, user) {
     try {
       return await runTransaction(db, async (transaction) => {
         const quantity = saleData.quantity;
         
-        // 1. Determine Price Logic
+        // Price Logic
         let finalPricePerTray;
         let priceName;
         let isSpecial = false;
         let isBulk = false;
 
-        // BULK RULE: If 20 or more trays, price is R55
         if (quantity >= 20) {
           finalPricePerTray = 55.00;
           priceName = 'Bulk Discount (20+)';
           isBulk = true;
         } else {
-          // Otherwise, fetch Standard or Special
           const basePriceInfo = await this.getCurrentBasePrice();
           finalPricePerTray = basePriceInfo.price;
           priceName = basePriceInfo.name;
@@ -96,30 +106,40 @@ class DatabaseService {
         
         const total = quantity * finalPricePerTray;
         
-        // 2. Check Inventory
+        // Inventory Check
         const inventoryRef = doc(db, this.COLLECTIONS.INVENTORY, 'current');
         const inventoryDoc = await transaction.get(inventoryRef);
         
-        if (!inventoryDoc.exists()) {
-          throw new Error('Inventory system not initialized.');
+        // FIX: Handle missing inventory document
+        let currentStock = 0;
+        let currentTotalSales = 0;
+        let currentTotalRevenue = 0;
+
+        if (inventoryDoc.exists()) {
+          const data = inventoryDoc.data();
+          currentStock = data.stock || 0;
+          currentTotalSales = data.totalSales || 0;
+          currentTotalRevenue = data.totalRevenue || 0;
+        } else {
+          // If doc doesn't exist, we assume 0 stock (or we could start at 0 and go negative if you prefer)
+          console.warn("Inventory doc missing. Re-initializing.");
         }
         
-        const inventory = inventoryDoc.data();
-        const newStock = inventory.stock - quantity;
+        const newStock = currentStock - quantity;
         
         if (newStock < 0) {
-          throw new Error(`Insufficient stock. Only ${inventory.stock} trays available.`);
+          throw new Error(`Insufficient stock. Only ${currentStock} trays available.`);
         }
         
-        // 3. Update Inventory
-        transaction.update(inventoryRef, {
+        // Update Inventory (Using set with merge to fix missing docs)
+        transaction.set(inventoryRef, {
           stock: newStock,
-          totalSales: (inventory.totalSales || 0) + quantity,
-          totalRevenue: (inventory.totalRevenue || 0) + total,
+          totalSales: currentTotalSales + quantity,
+          totalRevenue: currentTotalRevenue + total,
           lastUpdated: serverTimestamp()
-        });
+        }, { merge: true });
         
-        // 4. Create Sale Record
+        // Create Sale Record
         const salesRef = collection(db, this.COLLECTIONS.SALES);
         const newSaleRef = doc(salesRef);
         
@@ -147,33 +167,75 @@ class DatabaseService {
     }
   }
 
-  // Other helper methods remain similar but ensuring consistency...
-  
+  // 3. Set Standard Price
   async setStandardPrice(price) {
     const standardRef = doc(db, this.COLLECTIONS.SETTINGS, 'standard_price');
-    await setDoc(standardRef, { value: parseFloat(price), updatedAt: serverTimestamp() }, { merge: true });
+    await setDoc(standardRef, { 
+      value: parseFloat(price), 
+      updatedAt: serverTimestamp() 
+    }, { merge: true });
   }
 
+  // 4. Create Special Price
   async createSpecialPrice(priceData) {
     await addDoc(collection(db, this.COLLECTIONS.PRICES), {
-      ...priceData, isActive: true, createdAt: serverTimestamp()
+      ...priceData, 
+      isActive: true, 
+      createdAt: serverTimestamp()
     });
   }
 
+  // 5. Get Current Stock (Initializes if missing)
   async getCurrentStock() {
-    const docSnap = await getDoc(doc(db, this.COLLECTIONS.INVENTORY, 'current'));
-    return docSnap.exists() ? (docSnap.data().stock || 0) : 0;
+    try {
+      const inventoryRef = doc(db, this.COLLECTIONS.INVENTORY, 'current');
+      const inventoryDoc = await getDoc(inventoryRef);
+      
+      if (inventoryDoc.exists()) {
+        return inventoryDoc.data().stock || 0;
+      }
+      
+      // FIX: If deleted, recreate it immediately
+      await setDoc(inventoryRef, {
+        stock: 0,
+        totalSales: 0,
+        totalRevenue: 0,
+        lastUpdated: serverTimestamp()
+      });
+      return 0;
+    } catch (error) {
+      console.error('Error getting stock:', error);
+      return 0;
+    }
   }
 
+  // 6. Update Stock (FIXED: Uses setDoc instead of updateDoc)
   async updateStock(newStock) {
-    await updateDoc(doc(db, this.COLLECTIONS.INVENTORY, 'current'), {
-      stock: parseFloat(newStock), lastUpdated: serverTimestamp()
-    });
+    try {
+      const inventoryRef = doc(db, this.COLLECTIONS.INVENTORY, 'current');
+      
+      // Using setDoc with { merge: true } ensures that if the document
+      // was deleted, it will be recreated with this new stock value.
+      await setDoc(inventoryRef, {
+        stock: parseFloat(newStock),
+        lastUpdated: serverTimestamp()
+      }, { merge: true });
+      
+      console.log('Stock updated/restored to:', newStock);
+    } catch (error) {
+      console.error('Error updating stock:', error);
+      throw error;
+    }
   }
 
+  // 7. Listeners
   listenToInventory(callback) {
     return onSnapshot(doc(db, this.COLLECTIONS.INVENTORY, 'current'), (doc) => {
-      if (doc.exists()) callback({ stock: doc.data().stock || 0 });
+      if (doc.exists()) {
+        callback({ stock: doc.data().stock || 0 });
+      } else {
+        callback({ stock: 0 });
+      }
     });
   }
 
