@@ -4,6 +4,7 @@ A modern, mobile-first inventory and sales management application designed speci
 ## Key Features
 
 Stock & Sales Management
+
 Real-Time Inventory: Instantly updates stock levels across all devices as sales are made.
 
 ## Smart Pricing Engine:
