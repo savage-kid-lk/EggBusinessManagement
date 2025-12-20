@@ -1,26 +1,14 @@
 import React, { useState } from 'react';
-import { useAuthState } from 'react-firebase-hooks/auth';
-import { auth } from '../../firebase';
+import { signInWithGoogleSecure } from '../../firebase'; // Keep using the secure function from before
 import GoogleAuth from './GoogleAuth';
 import PhoneAuth from './PhoneAuth';
 import '../../styles/Auth.css';
 
 const Login = () => {
-  const [user, loading] = useAuthState(auth);
   const [authMethod, setAuthMethod] = useState('google');
 
-  // Loading State
-  if (loading) {
-    return (
-      <div className="login-container">
-        <div className="loading-spinner">Loading...</div>
-      </div>
-    );
-  }
-
-  // If user is authenticated, they shouldn't see this screen 
-  // (App.js handles redirect to dashboard)
-  if (user) return null; 
+  // The ProtectedRoute in App.js will handle the redirect logic.
+  // This component just displays the buttons.
 
   return (
     <div className="login-container">
@@ -29,10 +17,7 @@ const Login = () => {
           <span className="logo-icon">🥚</span>
           <h1>Egg Stock Control</h1>
         </div>
-        
-        <p className="app-description">
-          Authorized Staff Access Only
-        </p>
+        <p className="app-description">Authorized Staff Access Only</p>
 
         <div className="auth-methods">
           <div className="auth-method-tabs">
@@ -40,24 +25,18 @@ const Login = () => {
               className={`method-tab ${authMethod === 'google' ? 'active' : ''}`}
               onClick={() => setAuthMethod('google')}
             >
-              <span className="tab-icon">G</span>
               Google
             </button>
             <button 
               className={`method-tab ${authMethod === 'phone' ? 'active' : ''}`}
               onClick={() => setAuthMethod('phone')}
             >
-              <span className="tab-icon">📱</span>
               Phone
             </button>
           </div>
 
           <div className="auth-content">
-            {authMethod === 'google' ? (
-              <GoogleAuth />
-            ) : (
-              <PhoneAuth />
-            )}
+            {authMethod === 'google' ? <GoogleAuth /> : <PhoneAuth />}
           </div>
         </div>
       </div>

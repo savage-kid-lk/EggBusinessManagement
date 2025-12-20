@@ -1,15 +1,17 @@
 import React, { useEffect } from 'react';
+import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
 import { useAuthState } from 'react-firebase-hooks/auth';
 import { auth } from './firebase';
 import database from './services/database';
 import Login from './components/Auth/Login';
 import Dashboard from './components/Dashboard/Dashboard';
+import ProtectedRoute from './components/Auth/ProtectedRoute'; // Your new Security Component
 import './App.css';
 
 function App() {
   const [user, loading] = useAuthState(auth);
 
-  // Setup daily report at 23:59
+  // --- DAILY REPORT SCHEDULING LOGIC (Preserved) ---
   useEffect(() => {
     const scheduleDailyReport = () => {
       const now = new Date();
@@ -28,6 +30,8 @@ function App() {
       const timeout = setTimeout(async () => {
         try {
           console.log('Generating daily report...');
+          // Note: This requires the user to be logged in/authorized 
+          // if your database rules are strict.
           await database.generateDailyReport();
           scheduleDailyReport(); // Schedule next day
         } catch (error) {
@@ -49,6 +53,7 @@ function App() {
     };
   }, []);
 
+  // --- LOADING STATE ---
   if (loading) {
     return (
       <div className="app-loading">
@@ -58,10 +63,34 @@ function App() {
     );
   }
 
+  // --- SECURE ROUTING ---
   return (
-    <div className="App">
-      {user ? <Dashboard /> : <Login />}
-    </div>
+    <Router>
+      <div className="App">
+        <Routes>
+          {/* Public Route: Login 
+             If user is already logged in, automatically send them to Dashboard (/)
+          */}
+          <Route 
+            path="/login" 
+            element={!user ? <Login /> : <Navigate to="/" />} 
+          />
+
+          {/* Protected Route: Dashboard 
+             This is the secure area. ProtectedRoute checks the Database whitelist.
+             If check fails, it kicks them back to login.
+          */}
+          <Route
+            path="/*"
+            element={
+              <ProtectedRoute>
+                <Dashboard />
+              </ProtectedRoute>
+            }
+          />
+        </Routes>
+      </div>
+    </Router>
   );
 }
 
