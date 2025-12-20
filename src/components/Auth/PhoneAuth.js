@@ -4,7 +4,7 @@ import {
   RecaptchaVerifier 
 } from 'firebase/auth';
 import Swal from 'sweetalert2';
-import { auth } from '../../firebase';
+import { auth, checkPhoneAllowed, verifyOtpSecure } from '../../firebase'; // Import secure functions
 import '../../styles/Auth.css';
 
 const PhoneAuth = () => {
@@ -14,54 +14,28 @@ const PhoneAuth = () => {
   const [isLoading, setIsLoading] = useState(false);
   const [countryCode, setCountryCode] = useState('+27');
 
-  // CLEANUP: properly remove recaptcha when leaving the page
+  // Cleanup Recaptcha
   useEffect(() => {
     return () => {
       if (window.recaptchaVerifier) {
-        try {
-          window.recaptchaVerifier.clear();
-          window.recaptchaVerifier = null;
-        } catch (e) {
-          console.error(e);
-        }
+        window.recaptchaVerifier.clear();
+        window.recaptchaVerifier = null;
       }
     };
   }, []);
 
   const setupRecaptcha = () => {
-    // 1. Check if element exists
     if (!document.getElementById('recaptcha-container')) return;
+    if (window.recaptchaVerifier) window.recaptchaVerifier.clear();
 
-    // 2. Clear existing verifier if any
-    if (window.recaptchaVerifier) {
-      window.recaptchaVerifier.clear();
-      window.recaptchaVerifier = null;
-    }
-
-    // 3. Create new verifier
-    try {
-      window.recaptchaVerifier = new RecaptchaVerifier(
-        auth,
-        'recaptcha-container',
-        {
-          'size': 'normal', // Visible checkbox is most reliable for real SMS
-          'callback': (response) => {
-            console.log('reCAPTCHA solved');
-          },
-          'expired-callback': () => {
-            console.log('reCAPTCHA expired');
-          }
-        }
-      );
-      window.recaptchaVerifier.render();
-    } catch (err) {
-      console.error('Recaptcha setup error:', err);
-    }
+    window.recaptchaVerifier = new RecaptchaVerifier(auth, 'recaptcha-container', {
+      'size': 'normal',
+      'callback': () => console.log('reCAPTCHA solved')
+    });
+    window.recaptchaVerifier.render();
   };
 
-  // Initialize on mount
   useEffect(() => {
-    // Slight delay to ensure DOM is ready
     const timer = setTimeout(() => {
       if (!confirmationResult) setupRecaptcha();
     }, 500);
@@ -79,9 +53,11 @@ const PhoneAuth = () => {
     try {
       const cleanNumber = phoneNumber.replace(/^0+/, '').replace(/[^0-9]/g, '');
       const fullPhoneNumber = `${countryCode}${cleanNumber}`;
-      console.log('Sending real SMS to:', fullPhoneNumber);
 
-      // Ensure verifier exists
+      // 🛡️ SECURITY CHECK 1: Check DB before sending SMS
+      await checkPhoneAllowed(fullPhoneNumber);
+
+      // If check passes, proceed with Firebase Auth
       if (!window.recaptchaVerifier) setupRecaptcha();
 
       const confirmation = await signInWithPhoneNumber(
@@ -96,19 +72,21 @@ const PhoneAuth = () => {
     } catch (error) {
       console.error('SMS Error:', error);
       
-      // Reset logic on error
+      // Clear recaptcha so they can try again if it was a typo
       if (window.recaptchaVerifier) {
         window.recaptchaVerifier.clear();
         window.recaptchaVerifier = null;
-        setTimeout(() => setupRecaptcha(), 1000);
+        setTimeout(setupRecaptcha, 1000);
       }
 
-      let msg = 'Failed to send code.';
-      if (error.code === 'auth/invalid-phone-number') msg = 'Invalid Phone Number';
-      if (error.code === 'auth/too-many-requests') msg = 'Too many attempts. Try later.';
-      if (error.code === 'auth/quota-exceeded') msg = 'SMS Quota exceeded.';
+      let msg = error.message;
+      if (msg.includes('ACCESS DENIED')) {
+        msg = "This phone number is not registered in our system.";
+      } else if (error.code === 'auth/invalid-phone-number') {
+        msg = 'Invalid Phone Number';
+      }
       
-      Swal.fire('Error', msg, 'error');
+      Swal.fire('Access Denied', msg, 'error');
     } finally {
       setIsLoading(false);
     }
@@ -118,10 +96,18 @@ const PhoneAuth = () => {
     if (!verificationCode) return;
     setIsLoading(true);
     try {
-      await confirmationResult.confirm(verificationCode);
-      Swal.fire('Success', 'Phone Verified!', 'success');
+      // 🛡️ SECURITY CHECK 2: Verify OTP and Double Check DB
+      await verifyOtpSecure(confirmationResult, verificationCode);
+      
+      Swal.fire({
+        icon: 'success',
+        title: 'Verified!',
+        text: 'Access Granted',
+        timer: 1500,
+        showConfirmButton: false
+      });
     } catch (error) {
-      Swal.fire('Error', 'Invalid Code', 'error');
+      Swal.fire('Error', error.message || 'Invalid Code', 'error');
     } finally {
       setIsLoading(false);
     }
@@ -172,10 +158,6 @@ const PhoneAuth = () => {
         </div>
       )}
 
-      {/* CRITICAL FIX: 
-         This container is OUTSIDE the conditional rendering above.
-         It stays in the DOM but is hidden via CSS when not needed.
-      */}
       <div 
         id="recaptcha-container" 
         style={{ 
@@ -191,7 +173,7 @@ const PhoneAuth = () => {
           disabled={isLoading || !phoneNumber}
           className="send-code-btn"
         >
-          {isLoading ? 'Sending...' : 'Send Verification Code'}
+          {isLoading ? 'Verifying Database...' : 'Send Verification Code'}
         </button>
       )}
     </div>
