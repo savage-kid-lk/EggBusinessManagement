@@ -4,7 +4,7 @@ import {
   RecaptchaVerifier 
 } from 'firebase/auth';
 import Swal from 'sweetalert2';
-import { auth, checkPhoneAllowed, verifyOtpSecure } from '../../firebase'; // Import secure functions
+import { auth, checkPhoneAllowed, verifyOtpSecure } from '../../firebase';
 import '../../styles/Auth.css';
 
 const PhoneAuth = () => {
@@ -14,7 +14,21 @@ const PhoneAuth = () => {
   const [isLoading, setIsLoading] = useState(false);
   const [countryCode, setCountryCode] = useState('+27');
 
-  // Cleanup Recaptcha
+  // Helper: Format number to match Database (+27 format)
+  const formatPhoneNumber = (rawNumber, code) => {
+    // 1. Remove all spaces, dashes, parentheses
+    let clean = rawNumber.replace(/\D/g, ''); 
+
+    // 2. Handle leading zero (e.g. 076 -> 76)
+    if (clean.startsWith('0')) {
+      clean = clean.substring(1);
+    }
+
+    // 3. Combine with country code
+    // Final result should look like: +27764764157
+    return `${code}${clean}`;
+  };
+
   useEffect(() => {
     return () => {
       if (window.recaptchaVerifier) {
@@ -51,13 +65,15 @@ const PhoneAuth = () => {
     setIsLoading(true);
 
     try {
-      const cleanNumber = phoneNumber.replace(/^0+/, '').replace(/[^0-9]/g, '');
-      const fullPhoneNumber = `${countryCode}${cleanNumber}`;
+      // 1. Format the number correctly (+27...)
+      const fullPhoneNumber = formatPhoneNumber(phoneNumber, countryCode);
+      console.log('Verifying number against DB:', fullPhoneNumber);
 
-      // 🛡️ SECURITY CHECK 1: Check DB before sending SMS
+      // 🛡️ SECURITY CHECK 1: Check DB BEFORE sending SMS
+      // This will throw an error if the number isn't in 'users' collection
       await checkPhoneAllowed(fullPhoneNumber);
 
-      // If check passes, proceed with Firebase Auth
+      // 2. If check passes, proceed with Firebase Auth
       if (!window.recaptchaVerifier) setupRecaptcha();
 
       const confirmation = await signInWithPhoneNumber(
@@ -72,7 +88,7 @@ const PhoneAuth = () => {
     } catch (error) {
       console.error('SMS Error:', error);
       
-      // Clear recaptcha so they can try again if it was a typo
+      // Reset recaptcha on error so they can try again
       if (window.recaptchaVerifier) {
         window.recaptchaVerifier.clear();
         window.recaptchaVerifier = null;
@@ -81,9 +97,9 @@ const PhoneAuth = () => {
 
       let msg = error.message;
       if (msg.includes('ACCESS DENIED')) {
-        msg = "This phone number is not registered in our system.";
+        msg = "Access Denied: This phone number is not registered in our system.";
       } else if (error.code === 'auth/invalid-phone-number') {
-        msg = 'Invalid Phone Number';
+        msg = 'Invalid Phone Number format.';
       }
       
       Swal.fire('Access Denied', msg, 'error');
@@ -132,7 +148,7 @@ const PhoneAuth = () => {
         <div className="phone-input-container">
           <input 
             type="tel" 
-            placeholder="76 123 4567" 
+            placeholder="076 123 4567" 
             value={phoneNumber}
             onChange={e => setPhoneNumber(e.target.value)}
             className="phone-input"
