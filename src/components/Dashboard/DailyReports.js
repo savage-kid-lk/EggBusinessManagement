@@ -16,7 +16,7 @@ const DailyReports = ({ isAdmin }) => {
   const [loading, setLoading] = useState(false);
 
   // COST CONFIGURATION
-  const COST_PRICE_PER_TRAY = 40;
+  const COST_PRICE_PER_TRAY = 45;
 
   useEffect(() => {
     setLoading(true);

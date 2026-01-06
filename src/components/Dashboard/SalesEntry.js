@@ -5,7 +5,7 @@ import '../../styles/SalesEntry.css';
 
 const SalesEntry = ({ user, currentStock, userColor }) => {
   const [quantity, setQuantity] = useState(1);
-  const [basePrice, setBasePrice] = useState(60); // Default standard
+  const [basePrice, setBasePrice] = useState(60);
   const [priceInfo, setPriceInfo] = useState({});
   const [loading, setLoading] = useState(false);
   const [recentSales, setRecentSales] = useState([]);
@@ -69,7 +69,7 @@ const SalesEntry = ({ user, currentStock, userColor }) => {
     }
   };
 
-  const quickQuantities = [1, 2, 3, 4, 5, 20];
+  const quickQuantities = [1, 2, 3, 4, 5, 6, 7, 20];
 
   return (
     <div className="sales-entry">
@@ -95,7 +95,7 @@ const SalesEntry = ({ user, currentStock, userColor }) => {
         
         <div className="stock-warning">
           <span>In Stock: </span>
-          <span className={`stock-count ${currentStock < 10 ? 'low' : ''}`}>
+          <span className={`stock-count ${currentStock < 20 ? 'low' : ''}`}>
             {currentStock} Trays
           </span>
         </div>
