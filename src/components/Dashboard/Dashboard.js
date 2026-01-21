@@ -1,12 +1,13 @@
 import React, { useState, useEffect } from 'react';
 import { useAuthState } from 'react-firebase-hooks/auth';
-import { auth } from '../../firebase';
+import { collection, query, where, getDocs } from 'firebase/firestore'; // Import Firestore functions
+import { auth, db } from '../../firebase'; // Import auth and db
 import database from '../../services/database';
 import SalesEntry from './SalesEntry';
 import StockControl from './StockControl';
 import PriceManagement from './PriceManagement';
 import DailyReports from './DailyReports';
-import UserManagement from './UserManagement'; // <--- IMPORT THIS
+import UserManagement from './UserManagement';
 import Header from '../Layout/Header';
 import '../../styles/Dashboard.css';
 
@@ -15,24 +16,56 @@ const Dashboard = () => {
   const [inventory, setInventory] = useState({ stock: 0 });
   const [todaySales, setTodaySales] = useState([]);
   const [activeTab, setActiveTab] = useState('sales');
-  const [loading, setLoading] = useState(true);
+  
+  // NEW: State to hold admin status fetched from DB
+  const [isAdmin, setIsAdmin] = useState(false);
+  const [isRoleLoading, setIsRoleLoading] = useState(true);
 
-  // You can set multiple admins here or fetch from DB role
-  const ADMIN_EMAIL = process.env.REACT_APP_ADMIN_EMAIL || 'kekanaletago58@gmail.com';
-  const isAdmin = user?.email === ADMIN_EMAIL;
+  // Determine color based on the state
   const userColor = isAdmin ? '#4CAF50' : '#FF9800';
 
+  // 1. NEW EFFECT: Check User Role in Database
+  useEffect(() => {
+    const checkUserRole = async () => {
+      if (!user) return;
+
+      try {
+        // Keep hardcoded access for the main dev email as a fallback/super-admin
+        if (user.email === 'kekanaletago58@gmail.com') {
+          setIsAdmin(true);
+        }
+
+        // Query the database for the user's role
+        const usersRef = collection(db, 'users');
+        const q = query(usersRef, where('email', '==', user.email));
+        const snapshot = await getDocs(q);
+
+        if (!snapshot.empty) {
+          const userData = snapshot.docs[0].data();
+          // If database says admin, grant access
+          if (userData.role === 'admin') {
+            setIsAdmin(true);
+          }
+        }
+      } catch (error) {
+        console.error("Error verifying admin role:", error);
+      } finally {
+        setIsRoleLoading(false);
+      }
+    };
+
+    checkUserRole();
+  }, [user]);
+
+  // 2. Existing Data Loading
   useEffect(() => {
     if (!user) return;
     const loadData = async () => {
       try {
-        setLoading(true);
         const stock = await database.getCurrentStock();
         setInventory({ stock });
       } catch (error) {
         console.error('Error:', error);
-      } finally {
-        setLoading(false);
       }
     };
     loadData();
@@ -42,13 +75,16 @@ const Dashboard = () => {
   }, [user]);
 
   if (!user) { window.location.href = '/'; return null; }
-  if (loading) return <div className="loading-screen">Loading...</div>;
+  
+  // Optional: Show simple loading while checking role to prevent flickering
+  if (isRoleLoading) return <div className="loading-screen">Loading...</div>;
 
   const todayTotalRevenue = todaySales.reduce((sum, sale) => sum + sale.total, 0);
 
   return (
     <div className="dashboard">
-      <Header user={user} userColor={userColor} />
+      {/* Pass isAdmin to Header */}
+      <Header user={user} userColor={userColor} isAdmin={isAdmin} />
       
       <div className="dashboard-container">
         {/* STATS AREA */}
@@ -79,6 +115,7 @@ const Dashboard = () => {
             📊 Reports
           </button>
 
+          {/* DYNAMIC ADMIN TABS: Shows if database role is admin */}
           {isAdmin && (
             <>
               <button className={`nav-btn ${activeTab === 'stock' ? 'active' : ''}`} onClick={() => setActiveTab('stock')}>
@@ -87,7 +124,6 @@ const Dashboard = () => {
               <button className={`nav-btn ${activeTab === 'prices' ? 'active' : ''}`} onClick={() => setActiveTab('prices')}>
                 🏷️ Prices
               </button>
-              {/* NEW TAB FOR USERS */}
               <button className={`nav-btn ${activeTab === 'users' ? 'active' : ''}`} onClick={() => setActiveTab('users')}>
                 👥 Users
               </button>
@@ -104,8 +140,6 @@ const Dashboard = () => {
             <StockControl currentStock={inventory.stock} onStockUpdate={(newStock) => setInventory({ ...inventory, stock: newStock })} />
           )}
           {isAdmin && activeTab === 'prices' && <PriceManagement />}
-          
-          {/* NEW USER MANAGEMENT COMPONENT */}
           {isAdmin && activeTab === 'users' && <UserManagement />}
         </div>
       </div>

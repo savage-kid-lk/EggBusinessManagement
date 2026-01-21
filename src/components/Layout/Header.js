@@ -3,7 +3,8 @@ import { signOut } from 'firebase/auth';
 import { auth } from '../../firebase';
 import '../../styles/Header.css';
 
-const Header = ({ user, userColor }) => {
+// Added isAdmin to props
+const Header = ({ user, userColor, isAdmin }) => {
   const handleSignOut = async () => {
     try {
       await signOut(auth);
@@ -39,8 +40,9 @@ const Header = ({ user, userColor }) => {
           </div>
           <div className="user-details">
             <h3>{user.displayName || user.email}</h3>
+            {/* Display Admin based on database role passed from Dashboard */}
             <p style={{ color: userColor }}>
-              {user.email === (process.env.REACT_APP_ADMIN_EMAIL || 'kekanaletago58@gmail.com') ? 'Admin' : 'Assistant'}
+              {isAdmin ? 'Admin' : 'Assistant'}
             </p>
           </div>
           <div 
